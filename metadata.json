@@ -1,0 +1,14 @@
+{
+  "name": "FounderPath AI",
+  "description": "An Agentic Economic GPS that turns vocational skills into verified ventures through personalized business blueprints and learning paths.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "AI-powered skill auditing",
+    "Venture recommendation matching",
+    "Automated business plan generation",
+    "WhatsApp-integrated learning paths"
+  ]
+}

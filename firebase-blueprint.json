@@ -1,0 +1,67 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and prosperity profile.",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "phone": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "skill_profile": {
+          "type": "object",
+          "properties": {
+            "core_competencies": { "type": "array", "items": { "type": "string" } },
+            "ancillary_skills": { "type": "array", "items": { "type": "string" } },
+            "informal_experience": { "type": "array", "items": { "type": "string" } },
+            "certifications": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "issuer": { "type": "string" },
+                  "proof_url": { "type": "string" },
+                  "verified": { "type": "boolean" }
+                }
+              }
+            },
+            "confidence_gap": { "type": "array", "items": { "type": "string" } },
+            "learning_velocity": { "type": "string" }
+          }
+        },
+        "venture_recommendation": {
+          "type": "object",
+          "properties": {
+            "recommended_model": { "type": "string" },
+            "viability_score": { "type": "number" },
+            "reasoning": { "type": "string" },
+            "business_model_summary": { "type": "string" },
+            "startup_budget": { "type": "number" },
+            "first_30_days_revenue_estimate": { "type": "number" },
+            "required_upskilling": { "type": "array", "items": { "type": "string" } },
+            "recommended_learning_modules": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "operational_status": {
+          "type": "object",
+          "properties": {
+            "business_plan_generated": { "type": "boolean" },
+            "pitch_deck_generated": { "type": "boolean" },
+            "crm_configured": { "type": "boolean" },
+            "last_nudge_sent": { "type": "string", "format": "date-time" },
+            "nudge_cadence": { "type": "string" }
+          }
+        }
+      },
+      "required": ["user_id"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Unified user model containing skill profile and venture recommendations."
+    }
+  }
+}

@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation Blueprints
+    function isValidSkillProfile(profile) {
+      return profile == null || (
+        profile.core_competencies is list &&
+        profile.ancillary_skills is list &&
+        profile.informal_experience is list &&
+        profile.certifications is list &&
+        profile.confidence_gap is list &&
+        profile.learning_velocity is string
+      );
+    }
+
+    function isValidVentureRecommendation(rec) {
+      return rec == null || (
+        rec.recommended_model is string &&
+        rec.viability_score is number &&
+        rec.reasoning is string &&
+        rec.business_model_summary is string &&
+        rec.startup_budget is number &&
+        rec.first_30_days_revenue_estimate is number &&
+        rec.required_upskilling is list &&
+        rec.recommended_learning_modules is list
+      );
+    }
+
+    function isValidOperationalStatus(status) {
+      return status is map || (
+        status.business_plan_generated is bool &&
+        status.pitch_deck_generated is bool &&
+        status.crm_configured is bool &&
+        status.last_nudge_sent is string &&
+        status.nudge_cadence is string
+      );
+    }
+
+    function isValidUser(data) {
+      return data.user_id is string &&
+             data.user_id.size() <= 128 &&
+             (data.get('phone', null) == null || (data.phone is string && data.phone.size() <= 20)) &&
+             data.created_at is string &&
+             data.updated_at is string &&
+             isValidSkillProfile(data.get('skill_profile', null)) &&
+             isValidVentureRecommendation(data.get('venture_recommendation', null)) &&
+             isValidOperationalStatus(data.operational_status);
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId); // Restricted to owner only
+      
+      allow create: if isOwner(userId) && 
+                      isValidId(userId) && 
+                      isValidUser(incoming()) &&
+                      incoming().user_id == userId &&
+                      incoming().created_at == incoming().updated_at; // Initial creation
+
+      allow update: if isOwner(userId) && 
+                      isValidUser(incoming()) &&
+                      incoming().user_id == existing().user_id &&
+                      incoming().created_at == existing().created_at &&
+                      (
+                        // Action: Update Skill Profile & Recommendation
+                        incoming().diff(existing()).affectedKeys().hasAny(['skill_profile', 'venture_recommendation', 'updated_at']) ||
+                        // Action: Update Operational Status
+                        incoming().diff(existing()).affectedKeys().hasOnly(['operational_status', 'updated_at'])
+                      );
+      
+      allow delete: if false; // Users cannot delete their economic GPS records
+    }
+  }
+}
