@@ -47,43 +47,77 @@ export interface FirestoreErrorInfo {
 
 export function safeStringify(obj: any): string {
   try {
-    if (obj === null || typeof obj !== 'object') return String(obj);
+    if (obj === null || obj === undefined) return String(obj);
+    if (typeof obj !== 'object') return String(obj);
     
-    // Use a WeakSet to track seen objects
     const seen = new WeakSet();
     
+    // Helper to check for internal Firebase/Firestore objects
+    const isInternal = (val: any) => {
+      try {
+        if (!val || typeof val !== 'object') return false;
+        const cName = val.constructor?.name;
+        if (!cName) return false;
+        
+        return (
+          ['Y2', 'Ka', 'Firestore', 'FirestoreDatabase', 'FirestoreClient', 'FirebaseAppImpl'].includes(cName) ||
+          cName.length < 3 || 
+          cName.startsWith('Firebase') ||
+          cName.startsWith('Firestore') ||
+          (val.i && val.src && cName === 'Ka')
+        );
+      } catch (e) {
+        return false;
+      }
+    };
+
+    // If the root object itself is internal, stop immediately
+    if (isInternal(obj)) {
+      return `[Internal Object ${obj.constructor?.name || 'Unknown'}]`;
+    }
+
     return JSON.stringify(obj, (key, value) => {
-      // Handle the value being an Error object
+      // Basic type handling
+      if (value === null || value === undefined) return value;
+
+      // Handle Errors
       if (value instanceof Error) {
         return {
           message: value.message,
           name: value.name,
+          code: (value as any).code,
           stack: value.stack,
         };
       }
 
-      // Handle circular references and internal Firebase objects
-      if (typeof value === 'object' && value !== null) {
+      // Handle Map/Set
+      if (value instanceof Map) return Array.from(value.entries());
+      if (value instanceof Set) return Array.from(value.values());
+
+      // Object handling
+      if (typeof value === 'object') {
+        // Circularity check
         if (seen.has(value)) {
           return '[Circular]';
         }
+        
+        // Add to seen BEFORE internal check to be safe
         seen.add(value);
 
-        // Filter out suspected internal Firestore/Firebase objects which are problematic for stringification
-        if (value?.constructor?.name && 
-            (value.constructor.name === 'Y2' || 
-             value.constructor.name === 'Ka' ||
-             value.constructor.name === 'Firestore' ||
-             value.constructor.name === 'FirestoreDatabase')) {
-          return `[FirebaseInternal ${value.constructor.name}]`;
+        // Internal object check
+        if (isInternal(value)) {
+          return `[Internal Object ${value.constructor?.name || 'Unknown'}]`;
         }
       }
       
       return value;
     }, 2);
   } catch (err) {
-    console.warn("safeStringify failed:", err);
-    return `[Non-serializable: ${err instanceof Error ? err.message : String(err)}]`;
+    try {
+       return `[Unserializable: ${String(obj)}]`;
+    } catch (e) {
+       return '[Unserializable Content]';
+    }
   }
 }
 
@@ -109,13 +143,16 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   }
   
   const stringified = safeStringify(errInfo);
-  console.error(`Firestore Error [${operationType}] at [${path}]:`, {
-    message: errorMessage,
-    path,
-    operation: operationType,
-    // Avoid logging the raw error object if it might be circular
-    code: (error as any)?.code || 'unknown'
-  });
+  
+  // Use a safe way to log properties
+  const loggableError = error instanceof Error ? {
+    message: error.message,
+    name: error.name,
+    code: (error as any).code
+  } : String(error);
+
+  // Use safeStringify for the console log as well to avoid any circular structure issues in platform loggers
+  console.error(`Firestore Error [${operationType}] at [${path}]: ${safeStringify(loggableError)}`);
   
   throw new Error(stringified);
 }

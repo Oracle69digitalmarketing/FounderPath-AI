@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { auth, db, OperationType, handleFirestoreError } from './lib/firebase';
+import { auth, db, OperationType, handleFirestoreError, safeStringify } from './lib/firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { UserProfile } from './types';
@@ -61,7 +61,7 @@ export default function App() {
     try {
       await signInWithPopup(auth, provider);
     } catch (error) {
-      console.error('Login failed:', error instanceof Error ? error.message : String(error));
+      console.error('Login failed:', safeStringify(error));
     }
   };
 

@@ -3,6 +3,8 @@ import { VentureRecommendation, PitchSlide, Opportunity, LearningResource } from
 import { db, OperationType, handleFirestoreError } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 import { 
   Rocket, Target, DollarSign, BookOpen, ChevronRight, FileText, 
   Phone, ArrowRight, Loader2, Presentation, Search, Globe, 
@@ -36,7 +38,6 @@ export function RecommendationDisplay({ recommendation, isAnalyzing, userId, cur
     setIsSaving(true);
     try {
       const profileRef = doc(db, 'users', userId);
-      // Extra check for doc existence if needed, but updateDoc should fail gracefully if caught
       await updateDoc(profileRef, {
         phone: phone,
         updated_at: new Date().toISOString(),
@@ -51,157 +52,90 @@ export function RecommendationDisplay({ recommendation, isAnalyzing, userId, cur
     }
   };
 
-    const downloadBusinessPlan = () => {
-      if (!recommendation) {
-        alert("No recommendation available to download.");
-        return;
-      }
-      
-      const business_plan = recommendation.business_plan || {
-        executive_summary: "Generating blueprint summary...",
-        problem_solution: { problem: "N/A", solution: "N/A", unique_value_proposition: "N/A" },
-        market_analysis: { definition: "N/A", size_growth: "N/A", segments: [], competition: "N/A" },
-        operations_plan: { ten_day_roadmap: [], resource_needs: "N/A", legal_admin: "N/A" },
-        financial_forecast: { startup_costs: [], revenue_projections: { month_1_target: 0, pricing_model: "N/A", break_even_hours_or_units: "N/A" } },
-        risk_management: []
-      };
-      
-      const { 
-        recommended_model = "New Venture", 
-        reasoning = "N/A", 
-        first_30_days_revenue_estimate = 0, 
-        startup_budget = 0,
-        pitch_deck = [],
-        scouted_opportunities = [],
-        learning_resources = [],
-        required_upskilling = []
-      } = recommendation;
-      
-      const problem_solution = business_plan.problem_solution || { problem: "N/A", solution: "N/A", unique_value_proposition: "N/A" };
-      const market_analysis = business_plan.market_analysis || { definition: "N/A", size_growth: "N/A", segments: [], competition: "N/A" };
-      const operations_plan = business_plan.operations_plan || { ten_day_roadmap: [], resource_needs: "N/A", legal_admin: "N/A" };
-      const financial_forecast = business_plan.financial_forecast || { startup_costs: [], revenue_projections: { month_1_target: 0, pricing_model: "N/A", break_even_hours_or_units: "N/A" } };
-      const risk_management = business_plan.risk_management || [];
+  const downloadBusinessPlan = () => {
+    if (!recommendation) return;
 
-      const content = `
-========================================================================
-                      FOUNDERPATH BUSINESS BLUEPRINT
-                   "Bridging Skills to Economic Power"
-========================================================================
-CONFIDENTIAL BUSINESS PLAN - FOR EXTERNAL REVIEW & EXECUTION
-========================================================================
-PROJECT NAME: ${recommended_model}
-PROPRIETOR: [FOUNDERPATH USER]
-DATE GENERATED: ${new Date().toLocaleDateString()}
-CURRENCY: NGN (Naira)
-========================================================================
+    const doc = new jsPDF();
+    const margin = 20;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let y = 30;
 
-1. EXECUTIVE SUMMARY
-------------------------------------------------------------------------
-${business_plan.executive_summary || "Strategic alignment between vocational competency and market demand."}
+    const addText = (text: string, size = 12, style = 'normal', color = [0, 0, 0]) => {
+      doc.setFont('helvetica', style);
+      doc.setFontSize(size);
+      doc.setTextColor(color[0], color[1], color[2]);
+      const splitText = doc.splitTextToSize(text, pageWidth - (margin * 2));
+      doc.text(splitText, margin, y);
+      y += (splitText.length * (size / 2)) + 5;
+    };
 
-2. THE VENTURE MODEL & STRATEGIC REASONING
-------------------------------------------------------------------------
-VENTURE MODEL: ${recommended_model}
+    const addSection = (title: string) => {
+      y += 10;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(79, 70, 229); // indigo-600
+      doc.text(title.toUpperCase(), margin, y);
+      doc.setDrawColor(79, 70, 229);
+      doc.line(margin, y + 2, pageWidth - margin, y + 2);
+      y += 12;
+    };
 
-CORE RATIONALE:
-${reasoning}
+    // Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.text('FOUNDERPATH BUSINESS BLUEPRINT', margin, y);
+    y += 10;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(100);
+    doc.text('CONFIDENTIAL - FOR EXTERNAL REVIEW & EXECUTION', margin, y);
+    y += 15;
 
-3. PROBLEM & SOLUTION DEEP-DIVE
-------------------------------------------------------------------------
-THE CORE PROBLEM:
-${problem_solution.problem}
+    addText(`PROJECT: ${recommendation.recommended_model}`, 16, 'bold', [15, 23, 42]);
+    addText(`DATE: ${new Date().toLocaleDateString()}`, 10);
+    addText(`CURRENCY: NGN (Nigerian Naira)`, 10);
 
-OUR ARCHITECTED SOLUTION:
-${problem_solution.solution}
+    addSection('1. Executive Summary');
+    addText(recommendation.business_plan.executive_summary, 11);
 
-UNIQUE VALUE PROPOSITION (UVP):
-${problem_solution.unique_value_proposition}
+    addSection('2. Problem & Solution');
+    addText(`Problem: ${recommendation.business_plan.problem_solution.problem}`, 11);
+    addText(`Solution: ${recommendation.business_plan.problem_solution.solution}`, 11);
+    addText(`UVP: ${recommendation.business_plan.problem_solution.unique_value_proposition}`, 11, 'bold');
 
-4. TARGET MARKET ANALYSIS & SEGMENTATION
-------------------------------------------------------------------------
-MARKET DEFINITION:
-${market_analysis.definition}
+    if (y > 250) { doc.addPage(); y = 30; }
 
-MARKET SIZE & GROWTH POTENTIAL:
-${market_analysis.size_growth}
+    addSection('3. Market Analysis');
+    addText(`Definition: ${recommendation.business_plan.market_analysis.definition}`, 11);
+    addText(`Size: ${recommendation.business_plan.market_analysis.size_growth}`, 11);
+    addText(`Segments: ${recommendation.business_plan.market_analysis.segments.join(', ')}`, 11);
 
-PRIMARY TARGET SEGMENTS:
-${(market_analysis.segments || []).map(s => `- ${s}`).join('\n') || "N/A"}
+    addSection('4. 10-Day Launch Roadmap');
+    recommendation.business_plan.operations_plan.ten_day_roadmap.forEach((step, i) => {
+      addText(`${i + 1}. ${step}`, 10);
+      if (y > 270) { doc.addPage(); y = 30; }
+    });
 
-COMPETITIVE LANDSCAPE & DIFFERENTIATION:
-${market_analysis.competition}
+    addSection('5. Financial Projections');
+    addText(`Startup Budget: NGN ${recommendation.startup_budget.toLocaleString()}`, 12, 'bold');
+    addText(`Month 1 Revenue Target: NGN ${recommendation.first_30_days_revenue_estimate.toLocaleString()}`, 12, 'bold', [5, 150, 105]);
+    
+    // Costs Table
+    (doc as any).autoTable({
+      startY: y,
+      head: [['Item', 'Cost (NGN)', 'Justification']],
+      body: recommendation.business_plan.financial_forecast.startup_costs.map(c => [
+        c.item, 
+        c.cost.toLocaleString(), 
+        c.justification
+      ]),
+      margin: { left: margin },
+      theme: 'striped',
+      headStyles: { fillColor: [79, 70, 229] }
+    });
 
-5. 10-DAY OPERATIONAL LAUNCH ROADMAP
-------------------------------------------------------------------------
-This section outlines the immediate tactical steps required to achieve
-Operational Launch Phase within 10 days.
-
-LAUNCH SEQUENCE:
-${(operations_plan.ten_day_roadmap || []).map((step, i) => `DAY ${Math.floor(i/3)+1}: ${step}`).join('\n') || "N/A"}
-
-RESOURCE & INFRASTRUCTURE REQUIREMENTS:
-${operations_plan.resource_needs}
-
-LEGAL, ADMINISTRATIVE & REGULATORY SETUP:
-${operations_plan.legal_admin}
-
-6. FINANCIAL FORECAST (INITIAL 30 DAYS)
-------------------------------------------------------------------------
-TOTAL STARTUP BUDGET: NGN ${(startup_budget || 0).toLocaleString()}
-ESTIMATED MONTH 1 REVENUE: NGN ${(first_30_days_revenue_estimate || 0).toLocaleString()}
-
-ITEMIZED STARTUP COSTS:
-${(financial_forecast.startup_costs || []).map(c => `- ${c.item}: NGN ${(c.cost || 0).toLocaleString()}\n  Justification: ${c.justification}`).join('\n') || "N/A"}
-
-REVENUE PROJECTIONS & PRICING:
-- Month 1 Revenue Target: NGN ${(financial_forecast.revenue_projections?.month_1_target || 0).toLocaleString()}
-- Pricing Model: ${financial_forecast.revenue_projections?.pricing_model || "N/A"}
-- Break-even Analysis: ${financial_forecast.revenue_projections?.break_even_hours_or_units || "N/A"}
-
-7. RISK MANAGEMENT & MITIGATION STRATEGY
-------------------------------------------------------------------------
-The following risks have been identified as critical to localized operations:
-
-${(risk_management || []).map(r => `[RISK]: ${r.risk}\n[MITIGATION]: ${r.mitigation}\n`).join('\n') || "N/A"}
-
-8. GO-TO-MARKET (GTM) & CUSTOMER ACQUISITION
-------------------------------------------------------------------------
-${recommendation.gtm_strategy || "Organic growth through high-intent local networking and digital discovery."}
-
-9. SCOUTED OPPORTUNITIES & SOCIAL PROOF TACTICS
-------------------------------------------------------------------------
-${(scouted_opportunities || []).map(o => `PLATFORM: ${o.platform} (${o.type})\nTACTIC: ${o.tactic}\nSEARCH TERMS: ${o.search_terms.join(', ')}\n`).join('\n') || "N/A"}
-
-10. VENTURE PITCH DECK OUTLINE
-------------------------------------------------------------------------
-${(pitch_deck || []).map((slide, i) => `SLIDE ${i+1}: ${slide.title}\n- ${slide.content.join('\n- ')}\nVISUAL HINT: ${slide.visual_hint}\n`).join('\n') || "N/A"}
-
-11. LEARNING & MASTERY ROADMAP
-------------------------------------------------------------------------
-REQUIRED UPSKILLING:
-${(required_upskilling || []).map(s => `- ${s}`).join('\n')}
-
-CURATED RESOURCES:
-${(learning_resources || []).map(r => `- ${r.topic} (${r.source}): ${r.url}`).join('\n')}
-
-========================================================================
-Generated by FounderPath AI Agent @ BCT 3.0
-Master Architect: Gemini 3 Flash Preview
-========================================================================
-Disclaimer: This business plan is a model generated by AI. Financial 
-estimates and market data are projections based on the user's profile and 
-localized market patterns. Users are advised to perform manual due 
-diligence before committing capital.
-========================================================================
-    `.trim();
-
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Business_Blueprint_${recommended_model.replace(/\s+/g, '_')}.txt`;
-    a.click();
+    doc.save(`FounderPath_Blueprint_${recommendation.recommended_model.replace(/\s+/g, '_')}.pdf`);
   };
 
   if (isAnalyzing) {
